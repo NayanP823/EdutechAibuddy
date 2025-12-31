@@ -18,22 +18,22 @@ export const startChatSession = (prefs: UserPreferences) => {
   if (!ai) initializeGemini();
   if (!ai) throw new Error("Failed to initialize AI");
 
+  // Force the persona based on the preference
   const personalizedSystemPrompt = `
 ${GOOGLE_AI_STUDIO_PROMPT}
 
-CURRENT STUDENT PROFILE:
-- Age Group: ${prefs.ageGroup}
-- Language: ${prefs.language}
-- Interest: ${prefs.subjectInterest || 'General'}
+ACTIVATE THIS MODE NOW:
+- CURRENT STUDENT: ${prefs.ageGroup}
+- PREFERRED LANGUAGE: ${prefs.language}
 
-Adjust all responses to match this profile specifically.
+Note: If they are in Elementary mode, be MAXIMUM QUIRKY and CHILDISH. Use sound effects in text like *Bloop!* or *Whoosh!*.
 `;
 
   chatSession = ai.chats.create({
-    model: "gemini-2.5-flash",
+    model: "gemini-3-flash-preview",
     config: {
       systemInstruction: personalizedSystemPrompt,
-      temperature: 0.7,
+      temperature: 0.9, // Increased for more creative/quirky personality
     },
   });
 
@@ -52,21 +52,24 @@ export const sendMessageStream = async function* (message: string) {
     }
   } catch (error) {
     console.error("Error sending message:", error);
-    yield "Sorry, I'm having trouble connecting right now. Please try again.";
+    yield "Oopsie-woopsie! 🙈 My brain had a little hiccup. Can you say that again? 🌈";
   }
 };
 
 export const generateSpeech = async (text: string, audioCtx: AudioContext): Promise<AudioBuffer | null> => {
   const localAi = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
+    // Instruction to TTS to be expressive
+    const speechPrompt = `Read this in an extremely fun, animated, and expressive voice for a child, following any sound effects or emotions in the text: ${text}`;
+    
     const response = await localAi.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: `Read this clearly for a student: ${text}` }] }],
+      contents: [{ parts: [{ text: speechPrompt }] }],
       config: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Kore' },
+            prebuiltVoiceConfig: { voiceName: 'Puck' }, // Puck is often more energetic/quirky than Kore
           },
         },
       },

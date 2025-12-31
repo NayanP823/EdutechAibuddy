@@ -30,111 +30,115 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onFeedbac
 
     return parts.map((part, idx) => {
       if (part.type === 'image') {
+        const safeSrc = part.src.includes(' ') ? part.src.replace(/\s/g, '%20') : part.src;
         return (
-          <div key={idx} className="my-4 rounded-xl overflow-hidden shadow-sm border border-slate-200 bg-slate-50">
+          <div key={idx} className="my-6 rounded-2xl overflow-hidden shadow-md border-4 border-white transform transition-hover hover:scale-[1.02]">
             <img 
-              src={part.src} 
+              src={safeSrc} 
               alt={part.alt} 
-              className="w-full h-auto object-cover max-h-64 animate-fade-in"
+              className="w-full h-auto object-cover max-h-80"
               loading="lazy"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
             />
           </div>
         );
       }
-      return <div key={idx}>{parseTextBlocks(part.content)}</div>;
+      return <div key={idx} className="prose prose-slate prose-indigo max-w-none">{parseTextBlocks(part.content)}</div>;
     });
   };
 
   const parseTextBlocks = (text: string) => {
     const blocks = text.split(/\n\n+/);
     return blocks.map((block, index) => {
+      // Handle Headers
       if (block.match(/^##+\s/)) {
         const level = block.match(/^##+/)?.[0].length || 2;
         const content = block.replace(/^##+\s/, '');
         return (
-          <h3 key={index} className={`font-bold text-slate-800 mb-2 mt-4 ${level === 2 ? 'text-lg md:text-xl' : 'text-base md:text-lg'}`}>
+          <h3 key={index} className={`font-fun font-bold text-indigo-700 mb-3 mt-6 tracking-tight ${level === 2 ? 'text-xl md:text-2xl' : 'text-lg md:text-xl'}`}>
             {formatInline(content)}
           </h3>
         );
       }
       
+      // Handle Lists
       if (block.match(/^[*-]\s/m)) {
          const items = block.split('\n').filter(line => line.trim().match(/^[*-]\s/));
          if (items.length > 0) {
            return (
-             <ul key={index} className="list-disc pl-5 space-y-1 mb-3 text-slate-700 marker:text-indigo-400">
+             <ul key={index} className="list-disc pl-6 space-y-2 mb-4 text-slate-700">
                {items.map((item, i) => (
-                 <li key={i}>{formatInline(item.replace(/^[*-]\s/, ''))}</li>
+                 <li key={i} className="pl-1">{formatInline(item.replace(/^[*-]\s/, ''))}</li>
                ))}
              </ul>
            );
          }
       }
 
-      return <p key={index} className="mb-3 leading-relaxed text-slate-700">{formatInline(block)}</p>;
+      // Handle standard paragraphs
+      return <p key={index} className="mb-4 leading-relaxed text-slate-800 text-[15px] md:text-[16px]">{formatInline(block)}</p>;
     });
   };
 
   const formatInline = (text: string) => {
+    // Split by bold (**), italics (*), and maybe code (`)
     const parts = text.split(/(\*\*.*?\*\*|\*.*?\*)/g);
     return parts.map((part, i) => {
       if (part.startsWith('**') && part.endsWith('**')) {
-        return <strong key={i} className="font-semibold text-slate-900">{part.slice(2, -2)}</strong>;
+        return (
+          <strong key={i} className="font-bold text-indigo-900 bg-indigo-50 px-1 rounded-md border-b-2 border-indigo-200">
+            {part.slice(2, -2)}
+          </strong>
+        );
       }
       if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
-        return <em key={i} className="italic text-slate-600">{part.slice(1, -1)}</em>;
+        return <em key={i} className="italic text-indigo-600 font-medium">{part.slice(1, -1)}</em>;
       }
       return part;
     });
   };
 
-  const isSpeaking = message.audioPlaying || message.isAudioLoading;
-
   return (
-    <div className={`flex w-full ${isBot ? 'justify-start' : 'justify-end'} mb-6 animate-fade-in-up`}>
-      <div className={`flex max-w-[90%] md:max-w-[80%] flex-col ${isBot ? 'items-start' : 'items-end'}`}>
+    <div className={`flex w-full ${isBot ? 'justify-start' : 'justify-end'} mb-8 animate-fade-in-up`}>
+      <div className={`flex max-w-[92%] md:max-w-[85%] flex-col ${isBot ? 'items-start' : 'items-end'}`}>
         
         <div className={`flex items-end gap-3 ${isBot ? 'flex-row' : 'flex-row-reverse'}`}>
-          <div className="flex-shrink-0 hidden md:block mb-2">
+          <div className="flex-shrink-0 hidden md:block mb-1">
              {isBot ? (
-               <div className="w-8 h-8 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 border border-indigo-200 shadow-sm">
-                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+               <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-lg animate-float">
+                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.499 5.221 69.78 69.78 0 00-2.658.814m-15.481 0A59.906 59.906 0 0112 3.493a59.906 59.906 0 0110.499 5.221M12 20.904a48.622 48.622 0 01-3.047-3.355m3.047 3.355A48.622 48.622 0 0115.047 17.549" />
                  </svg>
                </div>
              ) : (
-                <img 
-                  src={`https://picsum.photos/seed/${message.id}/32/32`} 
-                  alt="User" 
-                  className="w-8 h-8 rounded-xl border-2 border-white shadow-sm"
-                />
+                <div className="w-10 h-10 rounded-2xl bg-slate-200 overflow-hidden border-2 border-white shadow-md">
+                  <img src={`https://picsum.photos/seed/${message.id}/80/80`} alt="User" />
+                </div>
              )}
           </div>
 
           <div 
-            className={`relative px-5 py-4 text-sm md:text-base rounded-2xl shadow-sm
+            className={`relative px-6 py-5 rounded-3xl shadow-sm border
               ${isBot 
-                ? 'bg-white text-slate-800 border border-slate-100 rounded-tl-none' 
-                : 'bg-indigo-600 text-white rounded-tr-none'
+                ? 'bg-gradient-to-br from-white to-indigo-50 text-slate-800 border-indigo-100 rounded-bl-none' 
+                : 'bg-gradient-to-br from-indigo-600 to-indigo-700 text-white border-indigo-500 rounded-br-none shadow-indigo-100'
               }`}
           >
             {isBot && onSpeak && !message.isThinking && (
               <button 
                 onClick={() => onSpeak(message.text, message.id)}
-                className={`absolute -top-3 -right-3 p-2 rounded-full shadow-md transition-all z-10 
+                className={`absolute -top-3 -right-3 p-2.5 rounded-full shadow-lg transition-all z-10 
                   ${message.audioPlaying 
                     ? 'bg-red-500 text-white animate-pulse' 
                     : message.isAudioLoading 
-                      ? 'bg-indigo-100 text-indigo-600 cursor-wait'
-                      : 'bg-white text-slate-500 hover:text-indigo-600 hover:scale-110 active:scale-95'
+                      ? 'bg-white text-indigo-600 cursor-wait'
+                      : 'bg-white text-indigo-600 hover:scale-110 active:scale-95 border border-indigo-100'
                   }`}
-                title={message.audioPlaying ? "Stop listening" : "Listen to response"}
               >
                 {message.isAudioLoading ? (
-                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
+                  <div className="h-4 w-4 border-2 border-indigo-600 border-t-transparent animate-spin rounded-full"></div>
                 ) : message.audioPlaying ? (
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
                     <rect x="6" y="6" width="12" height="12" rx="2" />
@@ -148,40 +152,33 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onFeedbac
             )}
 
             {isBot ? (
-              <div className="prose prose-sm prose-indigo max-w-none">
-                {renderMarkdown(message.text)}
-              </div>
+              <div>{renderMarkdown(message.text)}</div>
             ) : (
-              <div className="whitespace-pre-wrap leading-relaxed">{message.text}</div>
+              <div className="whitespace-pre-wrap leading-relaxed font-medium">{message.text}</div>
             )}
 
             {message.isThinking && (
-               <div className="flex items-center mt-2 text-slate-400">
-                 <span className="text-xs font-medium mr-2">Thinking</span>
-                 <span className="inline-flex">
-                   <span className="animate-bounce mx-0.5 h-1 w-1 bg-slate-400 rounded-full"></span>
-                   <span className="animate-bounce mx-0.5 delay-100 h-1 w-1 bg-slate-400 rounded-full"></span>
-                   <span className="animate-bounce mx-0.5 delay-200 h-1 w-1 bg-slate-400 rounded-full"></span>
-                 </span>
+               <div className="flex items-center mt-3 text-indigo-400">
+                 <span className="text-xs font-bold uppercase tracking-wider mr-2 font-fun">EduBuddy is Thinking...</span>
+                 <div className="flex gap-1">
+                   <div className="h-1.5 w-1.5 bg-indigo-400 rounded-full animate-bounce"></div>
+                   <div className="h-1.5 w-1.5 bg-indigo-400 rounded-full animate-bounce delay-75"></div>
+                   <div className="h-1.5 w-1.5 bg-indigo-400 rounded-full animate-bounce delay-150"></div>
+                 </div>
                </div>
             )}
           </div>
         </div>
 
         {isBot && !message.isThinking && (
-          <div className="flex items-center gap-2 mt-2 md:ml-11">
-             <button onClick={() => onFeedback('up', message.id)} className="p-1.5 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors">
+          <div className="flex items-center gap-2 mt-2 md:ml-12 opacity-0 group-hover:opacity-100 transition-opacity">
+             <button onClick={() => onFeedback('up', message.id)} className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-xl transition-all">
                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
                </svg>
              </button>
-             <button onClick={() => onFeedback('down', message.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018a2 2 0 01.485.06l3.76.92m0 0h3.583a2 2 0 011.956 1.573l.417 3.777a2 2 0 01-1.946 2.25h-1.135M14 10v10a2 2 0 002 2h.095c.5 0 .905-.405.905-.905 0-.714.211-1.412.608-2.006L17 13V4m-7 10h2" />
-                </svg>
-             </button>
-             <button onClick={() => onFeedback('simplify', message.id)} className="px-3 py-1 text-xs font-medium text-slate-500 bg-white hover:bg-indigo-50 hover:text-indigo-600 rounded-full border border-slate-200 transition-colors shadow-sm">
-               ✏️ Simplify
+             <button onClick={() => onFeedback('simplify', message.id)} className="px-4 py-1.5 text-xs font-bold text-indigo-600 bg-white hover:bg-indigo-50 rounded-full border border-indigo-100 transition-all shadow-sm font-fun">
+               ✨ Make it Simpler!
              </button>
           </div>
         )}
