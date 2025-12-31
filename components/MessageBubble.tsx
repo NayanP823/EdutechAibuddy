@@ -1,32 +1,29 @@
+
 import React from 'react';
 import { Message, Sender } from '../types';
 
 interface MessageBubbleProps {
   message: Message;
   onFeedback: (type: 'up' | 'down' | 'simplify', id: string) => void;
+  onSpeak?: (text: string, id: string) => void;
 }
 
-export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onFeedback }) => {
+export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onFeedback, onSpeak }) => {
   const isBot = message.role === Sender.Bot;
 
-  // Custom Lightweight Markdown Parser
   const renderMarkdown = (text: string) => {
-    // 1. Handle Images: ![alt](url)
     const imageRegex = /!\[(.*?)\]\((.*?)\)/g;
     let parts = [];
     let lastIndex = 0;
     let match;
 
     while ((match = imageRegex.exec(text)) !== null) {
-      // Push text before image
       if (match.index > lastIndex) {
         parts.push({ type: 'text', content: text.slice(lastIndex, match.index) });
       }
-      // Push image
       parts.push({ type: 'image', alt: match[1], src: match[2] });
       lastIndex = match.index + match[0].length;
     }
-    // Push remaining text
     if (lastIndex < text.length) {
       parts.push({ type: 'text', content: text.slice(lastIndex) });
     }
@@ -49,11 +46,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onFeedbac
   };
 
   const parseTextBlocks = (text: string) => {
-    // Split by double newlines for paragraphs/blocks
     const blocks = text.split(/\n\n+/);
-
     return blocks.map((block, index) => {
-      // Headings: ## Title
       if (block.match(/^##+\s/)) {
         const level = block.match(/^##+/)?.[0].length || 2;
         const content = block.replace(/^##+\s/, '');
@@ -64,8 +58,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onFeedbac
         );
       }
       
-      // Lists: * Item or - Item
-      // We check if the block looks like a list (multiple lines starting with * or -)
       if (block.match(/^[*-]\s/m)) {
          const items = block.split('\n').filter(line => line.trim().match(/^[*-]\s/));
          if (items.length > 0) {
@@ -79,16 +71,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onFeedbac
          }
       }
 
-      // Standard Paragraph
-      return (
-        <p key={index} className="mb-3 leading-relaxed text-slate-700">
-          {formatInline(block)}
-        </p>
-      );
+      return <p key={index} className="mb-3 leading-relaxed text-slate-700">{formatInline(block)}</p>;
     });
   };
 
-  // Bold (**text**) and Italic (*text*)
   const formatInline = (text: string) => {
     const parts = text.split(/(\*\*.*?\*\*|\*.*?\*)/g);
     return parts.map((part, i) => {
@@ -107,7 +93,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onFeedbac
       <div className={`flex max-w-[90%] md:max-w-[80%] flex-col ${isBot ? 'items-start' : 'items-end'}`}>
         
         <div className={`flex items-end gap-3 ${isBot ? 'flex-row' : 'flex-row-reverse'}`}>
-          {/* Avatar */}
           <div className="flex-shrink-0 hidden md:block mb-2">
              {isBot ? (
                <div className="w-8 h-8 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 border border-indigo-200 shadow-sm">
@@ -117,14 +102,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onFeedbac
                </div>
              ) : (
                 <img 
-                  src="https://picsum.photos/seed/user/32/32" 
+                  src={`https://picsum.photos/seed/${message.id}/32/32`} 
                   alt="User" 
                   className="w-8 h-8 rounded-xl border-2 border-white shadow-sm"
                 />
              )}
           </div>
 
-          {/* Bubble */}
           <div 
             className={`relative px-5 py-4 text-sm md:text-base rounded-2xl shadow-sm
               ${isBot 
@@ -132,6 +116,28 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onFeedbac
                 : 'bg-indigo-600 text-white rounded-tr-none'
               }`}
           >
+            {isBot && onSpeak && !message.isThinking && (
+              <button 
+                onClick={() => onSpeak(message.text, message.id)}
+                className={`absolute -top-3 -right-3 p-2 rounded-full shadow-md transition-all z-10 
+                  ${message.audioPlaying 
+                    ? 'bg-red-500 text-white animate-pulse' 
+                    : 'bg-white text-slate-500 hover:text-indigo-600 hover:scale-110 active:scale-95'
+                  }`}
+                title={message.audioPlaying ? "Stop listening" : "Listen to response"}
+              >
+                {message.audioPlaying ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                    <rect x="6" y="6" width="12" height="12" rx="2" />
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                  </svg>
+                )}
+              </button>
+            )}
+
             {isBot ? (
               <div className="prose prose-sm prose-indigo max-w-none">
                 {renderMarkdown(message.text)}
@@ -153,31 +159,19 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onFeedbac
           </div>
         </div>
 
-        {/* Feedback Actions (Bot only) */}
         {isBot && !message.isThinking && (
           <div className="flex items-center gap-2 mt-2 md:ml-11">
-             <button 
-                onClick={() => onFeedback('up', message.id)}
-                className="p-1.5 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                title="Helpful"
-             >
+             <button onClick={() => onFeedback('up', message.id)} className="p-1.5 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors">
                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
                </svg>
              </button>
-             <button 
-                onClick={() => onFeedback('down', message.id)}
-                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                title="Not Helpful"
-             >
+             <button onClick={() => onFeedback('down', message.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018a2 2 0 01.485.06l3.76.92m0 0h3.583a2 2 0 011.956 1.573l.417 3.777a2 2 0 01-1.946 2.25h-1.135M14 10v10a2 2 0 002 2h.095c.5 0 .905-.405.905-.905 0-.714.211-1.412.608-2.006L17 13V4m-7 10h2" />
                 </svg>
              </button>
-             <button 
-                onClick={() => onFeedback('simplify', message.id)}
-                className="px-3 py-1 text-xs font-medium text-slate-500 bg-white hover:bg-indigo-50 hover:text-indigo-600 rounded-full border border-slate-200 transition-colors shadow-sm"
-             >
+             <button onClick={() => onFeedback('simplify', message.id)} className="px-3 py-1 text-xs font-medium text-slate-500 bg-white hover:bg-indigo-50 hover:text-indigo-600 rounded-full border border-slate-200 transition-colors shadow-sm">
                ✏️ Simplify
              </button>
           </div>

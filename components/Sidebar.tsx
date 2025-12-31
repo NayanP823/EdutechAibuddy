@@ -1,6 +1,7 @@
+
 import React from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { UserPreferences, AgeGroup, UserLanguage, ChartData } from '../types';
+import { UserPreferences, AgeGroup, UserLanguage } from '../types';
 import { Select } from './Select';
 import { MOCK_CHART_DATA } from '../constants';
 
@@ -22,14 +23,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ preferences, onPreferenceChang
     onPreferenceChange({ ...preferences, language: e.target.value as UserLanguage });
   };
 
+  const handleAutoReadToggle = () => {
+    onPreferenceChange({ ...preferences, autoRead: !preferences.autoRead });
+  };
+
   return (
-    <div 
-      className={`fixed inset-y-0 left-0 z-40 w-72 bg-white border-r border-slate-200 transform transition-transform duration-300 ease-in-out shadow-2xl lg:shadow-none lg:translate-x-0 lg:static lg:inset-auto
-        ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-      `}
-    >
+    <div className={`fixed inset-y-0 left-0 z-40 w-72 bg-white border-r border-slate-200 transform transition-transform duration-300 ease-in-out shadow-2xl lg:shadow-none lg:translate-x-0 lg:static lg:inset-auto ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
       <div className="flex flex-col h-full">
-        {/* Header */}
         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-200">
@@ -43,69 +43,48 @@ export const Sidebar: React.FC<SidebarProps> = ({ preferences, onPreferenceChang
             </div>
           </div>
           <button onClick={onClose} className="lg:hidden text-slate-400 hover:text-slate-600">
-             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-             </svg>
+             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
 
-        {/* Settings */}
         <div className="p-6 flex-1 overflow-y-auto space-y-8">
           <div className="space-y-4">
             <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Profile Settings</h2>
-            
             <Select label="Grade Level / Age" value={preferences.ageGroup} onChange={handleAgeChange}>
-              {Object.values(AgeGroup).map((age) => (
-                <option key={age} value={age}>{age}</option>
-              ))}
+              {Object.values(AgeGroup).map((age) => <option key={age} value={age}>{age}</option>)}
             </Select>
-
             <Select label="Language" value={preferences.language} onChange={handleLangChange}>
-              {Object.values(UserLanguage).map((lang) => (
-                <option key={lang} value={lang}>{lang}</option>
-              ))}
+              {Object.values(UserLanguage).map((lang) => <option key={lang} value={lang}>{lang}</option>)}
             </Select>
           </div>
 
-          {/* Visualization Example */}
+          <div className="space-y-4">
+            <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Accessibility</h2>
+            <label className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">
+              <span className="text-sm font-medium text-slate-700">Auto-read Responses</span>
+              <div className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ring-offset-2 focus:ring-2 focus:ring-indigo-500" onClick={handleAutoReadToggle} style={{ backgroundColor: preferences.autoRead ? '#4F46E5' : '#CBD5E1' }}>
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${preferences.autoRead ? 'translate-x-6' : 'translate-x-1'}`} />
+              </div>
+            </label>
+          </div>
+
           <div className="space-y-4">
             <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Learning Focus</h2>
             <div className="h-48 w-full bg-slate-50 rounded-xl border border-slate-100 p-2">
                <ResponsiveContainer width="100%" height="100%">
                  <PieChart>
-                   <Pie
-                     data={MOCK_CHART_DATA}
-                     cx="50%"
-                     cy="50%"
-                     innerRadius={40}
-                     outerRadius={60}
-                     paddingAngle={5}
-                     dataKey="value"
-                   >
-                     {MOCK_CHART_DATA.map((entry, index) => (
-                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                     ))}
+                   <Pie data={MOCK_CHART_DATA} cx="50%" cy="50%" innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">
+                     {MOCK_CHART_DATA.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
                    </Pie>
                    <Tooltip />
                  </PieChart>
                </ResponsiveContainer>
             </div>
-            <p className="text-xs text-center text-slate-400">Weekly topic distribution</p>
-          </div>
-
-          <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-100">
-            <h3 className="text-sm font-semibold text-indigo-900 mb-1">Pro Tip</h3>
-            <p className="text-xs text-indigo-700 leading-relaxed">
-              Try asking "Make a quiz for me" or "Explain like I'm 5" to switch modes!
-            </p>
           </div>
         </div>
 
-        {/* Footer */}
         <div className="p-6 border-t border-slate-100">
-          <p className="text-xs text-slate-400 text-center">
-            Powered by Gemini 2.5 Flash
-          </p>
+          <p className="text-xs text-slate-400 text-center">Powered by Gemini 2.5 Flash</p>
         </div>
       </div>
     </div>

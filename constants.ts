@@ -1,3 +1,4 @@
+
 import { AgeGroup, UserLanguage } from './types';
 
 export const GOOGLE_AI_STUDIO_PROMPT = `
@@ -15,12 +16,10 @@ ALWAYS FOLLOW THESE RULES:
 3.  **Visuals & Formatting**: 
     *   **IMAGES**: You MUST include at least one image for stories or complex concepts. Use this markdown syntax exactly: 
         \`![Image Description](https://image.pollinations.ai/prompt/{description}?width=800&height=600&nologo=true)\`
-        Replace \`{description}\` with a short, English visual description of the scene or concept (e.g., "photosynthesis_diagram_sunlight" or "happy_dog_running"). specific keywords work best.
-    *   **STRUCTURE**: Use Markdown headers (\`##\`) for main sections. Use bullet points for lists. Use **bold** for key terms.
-4.  **Tone & Language**: Use simple, age-appropriate language. For Elementary, use analogies. For High School, use correct terminology.
-5.  **Safety**: Do not invent facts. No medical/legal advice.
-6.  **Feedback Loop**: If the user says "too hard", simplify immediately.
-7.  **Engagement**: End with a friendly "next step" suggestion (e.g., "Want a short quiz on this?").
+        Replace \`{description}\` with a short, English visual description.
+    *   **STRUCTURE**: Use Markdown headers (\`##\`) for main sections. Use bullet points. Use **bold** for key terms.
+4.  **Tone & Language**: Use simple, age-appropriate language. For Elementary, use analogies. 
+5.  **Engagement**: End with a friendly "next step" suggestion.
 
 Provide the output in valid Markdown.
 `;
@@ -37,4 +36,5 @@ export const MOCK_CHART_DATA = [
 export const DEFAULT_PREFERENCES = {
   ageGroup: AgeGroup.MiddleSchool,
   language: UserLanguage.English,
+  autoRead: false
 };

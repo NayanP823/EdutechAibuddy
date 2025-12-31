@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { MessageBubble } from './components/MessageBubble';
 import { Button } from './components/Button';
-import { Message, Sender, UserPreferences, AgeGroup, UserLanguage } from './types';
+import { Message, Sender, UserPreferences } from './types';
 import { DEFAULT_PREFERENCES, INITIAL_GREETING } from './constants';
-import { startChatSession, sendMessageStream, updateSessionContext } from './services/geminiService';
+import { startChatSession, sendMessageStream, updateSessionContext, generateSpeech } from './services/geminiService';
 
 export default function App() {
   const [preferences, setPreferences] = useState<UserPreferences>(DEFAULT_PREFERENCES);
@@ -14,22 +15,65 @@ export default function App() {
   const [inputText, setInputText] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
+  
+  // Audio state management
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const currentAudioSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
-  // Initialize Chat on mount
+  const getAudioContext = () => {
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    return audioCtxRef.current;
+  };
+
+  const stopAllAudio = () => {
+    if (currentAudioSourceRef.current) {
+      try {
+        currentAudioSourceRef.current.stop();
+        currentAudioSourceRef.current.disconnect();
+      } catch (e) {
+        // Source might already be stopped
+      }
+      currentAudioSourceRef.current = null;
+    }
+    setMessages(prev => prev.map(m => ({ ...m, audioPlaying: false })));
+  };
+
   useEffect(() => {
     try {
         startChatSession(preferences);
     } catch (e) {
-        console.error("Failed to start chat session. Check API Key.");
-        setMessages(prev => [...prev, {
-            id: 'err-init',
-            role: Sender.Bot,
-            text: "Error: API Key missing. Please set process.env.API_KEY.",
-            timestamp: Date.now()
-        }]);
+        console.error("Failed to start chat session.");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    
+    // Initialize Speech Recognition
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = false;
+      recognitionRef.current.interimResults = false;
+      
+      recognitionRef.current.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        setInputText(transcript);
+        setIsListening(false);
+        setTimeout(() => handleSendMessage(transcript), 500);
+      };
+
+      recognitionRef.current.onerror = () => setIsListening(false);
+      recognitionRef.current.onend = () => setIsListening(false);
+    }
+
+    return () => {
+      stopAllAudio();
+      if (audioCtxRef.current) {
+        audioCtxRef.current.close();
+      }
+    };
   }, []);
 
   const scrollToBottom = () => {
@@ -40,13 +84,64 @@ export default function App() {
     scrollToBottom();
   }, [messages]);
 
-  const handleSendMessage = async () => {
-    if (!inputText.trim() || isLoading) return;
+  const handleSpeak = async (text: string, id: string) => {
+    const targetMessage = messages.find(m => m.id === id);
+    
+    // If already playing THIS message, stop it
+    if (targetMessage?.audioPlaying) {
+      stopAllAudio();
+      return;
+    }
+
+    // Stop anything else currently playing
+    stopAllAudio();
+
+    // Mark as playing (loading state)
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, audioPlaying: true } : m));
+
+    try {
+      // Clean text of markdown characters for better TTS
+      const cleanText = text.replace(/!\[.*?\]\(.*?\)/g, '') // remove images
+                           .replace(/[#*`_~]/g, '')           // remove formatting
+                           .trim();
+
+      const audioBuffer = await generateSpeech(cleanText);
+      
+      if (audioBuffer) {
+        const ctx = getAudioContext();
+        const source = ctx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(ctx.destination);
+        
+        source.onended = () => {
+          setMessages(prev => prev.map(m => m.id === id ? { ...m, audioPlaying: false } : m));
+          if (currentAudioSourceRef.current === source) {
+            currentAudioSourceRef.current = null;
+          }
+        };
+
+        currentAudioSourceRef.current = source;
+        source.start(0);
+      } else {
+        setMessages(prev => prev.map(m => m.id === id ? { ...m, audioPlaying: false } : m));
+      }
+    } catch (error) {
+      console.error("Audio playback error:", error);
+      setMessages(prev => prev.map(m => m.id === id ? { ...m, audioPlaying: false } : m));
+    }
+  };
+
+  const handleSendMessage = async (overrideText?: string) => {
+    const textToSend = overrideText || inputText;
+    if (!textToSend.trim() || isLoading) return;
+
+    // Stop audio when user sends a new message
+    stopAllAudio();
 
     const userMsg: Message = {
       id: Date.now().toString(),
       role: Sender.User,
-      text: inputText.trim(),
+      text: textToSend.trim(),
       timestamp: Date.now()
     };
 
@@ -54,7 +149,6 @@ export default function App() {
     setInputText('');
     setIsLoading(true);
 
-    // Add placeholder bot message
     const botMsgId = (Date.now() + 1).toString();
     setMessages(prev => [...prev, {
       id: botMsgId,
@@ -76,6 +170,10 @@ export default function App() {
             : msg
         ));
       }
+
+      if (preferences.autoRead) {
+        handleSpeak(fullResponse, botMsgId);
+      }
     } catch (error) {
       console.error(error);
     } finally {
@@ -83,35 +181,39 @@ export default function App() {
     }
   };
 
+  const handleMicClick = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+    } else {
+      // Resume AudioContext if it was suspended (browser policy)
+      getAudioContext().resume();
+      recognitionRef.current?.start();
+      setIsListening(true);
+    }
+  };
+
   const handlePreferenceChange = (newPrefs: UserPreferences) => {
     setPreferences(newPrefs);
-    // Restart session with new context
     updateSessionContext(newPrefs);
-    
-    // Add system notification in chat
     setMessages(prev => [...prev, {
       id: Date.now().toString(),
       role: Sender.Bot,
-      text: `*Updating profile to: ${newPrefs.ageGroup}, ${newPrefs.language}.*`,
+      text: `*Profile updated: ${newPrefs.ageGroup}.*`,
       timestamp: Date.now(),
       isThinking: false
     }]);
   };
 
   const handleFeedback = (type: 'up' | 'down' | 'simplify', id: string) => {
-    console.log(`Feedback: ${type} on message ${id}`);
-    
     if (type === 'simplify') {
-        setInputText("That was too hard. Can you explain it simpler?");
-        // Optionally auto-send:
-        // handleSendMessage(); 
-        // (But usually better to let user confirm or edit)
+        const text = "That was too hard. Can you explain it simpler?";
+        handleSendMessage(text);
     }
   };
 
   return (
     <div className="flex h-full bg-slate-50">
-      {/* Sidebar */}
       <Sidebar 
         preferences={preferences} 
         onPreferenceChange={handlePreferenceChange}
@@ -119,48 +221,44 @@ export default function App() {
         onClose={() => setIsSidebarOpen(false)}
       />
 
-      {/* Overlay for mobile sidebar */}
       {isSidebarOpen && (
-        <div 
-          className="fixed inset-0 z-30 bg-black/20 lg:hidden backdrop-blur-sm transition-opacity"
-          onClick={() => setIsSidebarOpen(false)}
-        />
+        <div className="fixed inset-0 z-30 bg-black/20 lg:hidden backdrop-blur-sm transition-opacity" onClick={() => setIsSidebarOpen(false)} />
       )}
 
-      {/* Main Chat Area */}
       <div className="flex-1 flex flex-col min-w-0 bg-white lg:bg-slate-50 relative">
-        
-        {/* Mobile Header */}
         <div className="lg:hidden flex items-center justify-between p-4 bg-white border-b border-slate-200 sticky top-0 z-20">
            <div className="flex items-center gap-2">
              <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white">
-               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                 <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z" />
-               </svg>
+               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z" /></svg>
              </div>
              <span className="font-bold text-slate-800">EduBuddy</span>
            </div>
            <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-slate-600">
-             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
-             </svg>
+             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" /></svg>
            </button>
         </div>
 
-        {/* Messages Area */}
         <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 scroll-smooth">
            <div className="max-w-3xl mx-auto">
               {messages.map((msg) => (
-                <MessageBubble key={msg.id} message={msg} onFeedback={handleFeedback} />
+                <MessageBubble key={msg.id} message={msg} onFeedback={handleFeedback} onSpeak={handleSpeak} />
               ))}
               <div ref={messagesEndRef} className="h-4" />
            </div>
         </div>
 
-        {/* Input Area */}
         <div className="p-4 bg-white border-t border-slate-200 sticky bottom-0 z-20">
            <div className="max-w-3xl mx-auto relative">
               <div className="relative flex items-center gap-2 bg-white rounded-2xl border border-slate-300 shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent px-2 py-2 transition-all">
+                 <button 
+                   onClick={handleMicClick}
+                   className={`p-2 rounded-xl transition-all ${isListening ? 'bg-red-100 text-red-600 animate-pulse' : 'text-slate-400 hover:text-indigo-600 hover:bg-slate-50'}`}
+                   title="Speak your question"
+                 >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                    </svg>
+                 </button>
                  <textarea
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
@@ -170,12 +268,12 @@ export default function App() {
                         handleSendMessage();
                       }
                     }}
-                    placeholder="Ask about math, history, stories..."
-                    className="flex-1 max-h-32 min-h-[48px] py-3 px-3 bg-transparent resize-none focus:outline-none text-slate-800 placeholder-slate-400"
+                    placeholder={isListening ? "Listening..." : "Ask something..."}
+                    className="flex-1 max-h-32 min-h-[48px] py-3 px-1 bg-transparent resize-none focus:outline-none text-slate-800 placeholder-slate-400"
                     rows={1}
                  />
                  <Button 
-                   onClick={handleSendMessage} 
+                   onClick={() => handleSendMessage()} 
                    disabled={isLoading || !inputText.trim()}
                    className="rounded-xl !p-3 self-end mb-0.5"
                  >
@@ -191,12 +289,9 @@ export default function App() {
                    )}
                  </Button>
               </div>
-              <p className="text-center text-[10px] text-slate-400 mt-2">
-                EduBuddy can make mistakes. Check important info.
-              </p>
+              <p className="text-center text-[10px] text-slate-400 mt-2">EduBuddy uses voice AI for better learning. Check important info.</p>
            </div>
         </div>
-
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
-import { GoogleGenAI, Chat } from "@google/genai";
+
+import { GoogleGenAI, Chat, Modality } from "@google/genai";
 import { GOOGLE_AI_STUDIO_PROMPT } from "../constants";
 import { UserPreferences } from "../types";
 
@@ -17,7 +18,6 @@ export const startChatSession = (prefs: UserPreferences) => {
   if (!ai) initializeGemini();
   if (!ai) throw new Error("Failed to initialize AI");
 
-  // Inject user preferences into the system instruction dynamically
   const personalizedSystemPrompt = `
 ${GOOGLE_AI_STUDIO_PROMPT}
 
@@ -33,7 +33,7 @@ Adjust all responses to match this profile specifically.
     model: "gemini-2.5-flash",
     config: {
       systemInstruction: personalizedSystemPrompt,
-      temperature: 0.7, // Balance creativity and accuracy
+      temperature: 0.7,
     },
   });
 
@@ -47,7 +47,6 @@ export const sendMessageStream = async function* (message: string) {
 
   try {
     const result = await chatSession.sendMessageStream({ message });
-    
     for await (const chunk of result) {
       yield chunk.text;
     }
@@ -57,9 +56,64 @@ export const sendMessageStream = async function* (message: string) {
   }
 };
 
+export const generateSpeech = async (text: string): Promise<AudioBuffer | null> => {
+  const localAi = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  try {
+    const response = await localAi.models.generateContent({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: [{ parts: [{ text: `Read this clearly for a student: ${text}` }] }],
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: 'Kore' },
+          },
+        },
+      },
+    });
+
+    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (!base64Audio) return null;
+
+    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+    const audioData = decodeBase64(base64Audio);
+    return await decodeAudioData(audioData, audioCtx, 24000, 1);
+  } catch (error) {
+    console.error("Speech generation error:", error);
+    return null;
+  }
+};
+
+// Audio Helpers
+function decodeBase64(base64: string) {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+async function decodeAudioData(
+  data: Uint8Array,
+  ctx: AudioContext,
+  sampleRate: number,
+  numChannels: number,
+): Promise<AudioBuffer> {
+  const dataInt16 = new Int16Array(data.buffer);
+  const frameCount = dataInt16.length / numChannels;
+  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+
+  for (let channel = 0; channel < numChannels; channel++) {
+    const channelData = buffer.getChannelData(channel);
+    for (let i = 0; i < frameCount; i++) {
+      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+    }
+  }
+  return buffer;
+}
+
 export const updateSessionContext = (prefs: UserPreferences) => {
-  // Since the API is stateless regarding system prompt updates in a live chat (usually),
-  // we just restart the session or send a stealth system message.
-  // For this demo, we will restart the session to ensure clean context switching.
   return startChatSession(prefs);
 };

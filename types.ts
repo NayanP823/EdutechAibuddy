@@ -1,3 +1,4 @@
+
 export enum Sender {
   User = 'user',
   Bot = 'model'
@@ -9,6 +10,7 @@ export interface Message {
   text: string;
   timestamp: number;
   isThinking?: boolean;
+  audioPlaying?: boolean;
 }
 
 export enum AgeGroup {
@@ -30,6 +32,7 @@ export interface UserPreferences {
   ageGroup: AgeGroup;
   language: UserLanguage;
   subjectInterest?: string;
+  autoRead: boolean;
 }
 
 export interface ChartData {
