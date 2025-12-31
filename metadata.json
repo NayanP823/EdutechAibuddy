@@ -1,0 +1,7 @@
+{
+  "name": "EduTech AI Buddy main",
+  "description": "A friendly, trustworthy AI tutor and storyteller for students, powered by Gemini.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
