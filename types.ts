@@ -11,6 +11,7 @@ export interface Message {
   timestamp: number;
   isThinking?: boolean;
   audioPlaying?: boolean;
+  isAudioLoading?: boolean;
 }
 
 export enum AgeGroup {

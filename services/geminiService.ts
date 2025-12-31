@@ -56,7 +56,7 @@ export const sendMessageStream = async function* (message: string) {
   }
 };
 
-export const generateSpeech = async (text: string): Promise<AudioBuffer | null> => {
+export const generateSpeech = async (text: string, audioCtx: AudioContext): Promise<AudioBuffer | null> => {
   const localAi = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
     const response = await localAi.models.generateContent({
@@ -75,7 +75,6 @@ export const generateSpeech = async (text: string): Promise<AudioBuffer | null> 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     if (!base64Audio) return null;
 
-    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
     const audioData = decodeBase64(base64Audio);
     return await decodeAudioData(audioData, audioCtx, 24000, 1);
   } catch (error) {

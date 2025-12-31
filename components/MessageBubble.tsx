@@ -88,6 +88,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onFeedbac
     });
   };
 
+  const isSpeaking = message.audioPlaying || message.isAudioLoading;
+
   return (
     <div className={`flex w-full ${isBot ? 'justify-start' : 'justify-end'} mb-6 animate-fade-in-up`}>
       <div className={`flex max-w-[90%] md:max-w-[80%] flex-col ${isBot ? 'items-start' : 'items-end'}`}>
@@ -122,11 +124,18 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onFeedbac
                 className={`absolute -top-3 -right-3 p-2 rounded-full shadow-md transition-all z-10 
                   ${message.audioPlaying 
                     ? 'bg-red-500 text-white animate-pulse' 
-                    : 'bg-white text-slate-500 hover:text-indigo-600 hover:scale-110 active:scale-95'
+                    : message.isAudioLoading 
+                      ? 'bg-indigo-100 text-indigo-600 cursor-wait'
+                      : 'bg-white text-slate-500 hover:text-indigo-600 hover:scale-110 active:scale-95'
                   }`}
                 title={message.audioPlaying ? "Stop listening" : "Listen to response"}
               >
-                {message.audioPlaying ? (
+                {message.isAudioLoading ? (
+                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                ) : message.audioPlaying ? (
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
                     <rect x="6" y="6" width="12" height="12" rx="2" />
                   </svg>

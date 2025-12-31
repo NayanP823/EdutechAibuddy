@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { MessageBubble } from './components/MessageBubble';
 import { Button } from './components/Button';
@@ -25,7 +25,7 @@ export default function App() {
 
   const getAudioContext = () => {
     if (!audioCtxRef.current) {
-      audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
     }
     return audioCtxRef.current;
   };
@@ -40,7 +40,7 @@ export default function App() {
       }
       currentAudioSourceRef.current = null;
     }
-    setMessages(prev => prev.map(m => ({ ...m, audioPlaying: false })));
+    setMessages(prev => prev.map(m => ({ ...m, audioPlaying: false, isAudioLoading: false })));
   };
 
   useEffect(() => {
@@ -87,8 +87,8 @@ export default function App() {
   const handleSpeak = async (text: string, id: string) => {
     const targetMessage = messages.find(m => m.id === id);
     
-    // If already playing THIS message, stop it
-    if (targetMessage?.audioPlaying) {
+    // If already playing OR loading THIS message, stop it
+    if (targetMessage?.audioPlaying || targetMessage?.isAudioLoading) {
       stopAllAudio();
       return;
     }
@@ -96,8 +96,8 @@ export default function App() {
     // Stop anything else currently playing
     stopAllAudio();
 
-    // Mark as playing (loading state)
-    setMessages(prev => prev.map(m => m.id === id ? { ...m, audioPlaying: true } : m));
+    // Mark as loading
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, isAudioLoading: true } : m));
 
     try {
       // Clean text of markdown characters for better TTS
@@ -105,10 +105,20 @@ export default function App() {
                            .replace(/[#*`_~]/g, '')           // remove formatting
                            .trim();
 
-      const audioBuffer = await generateSpeech(cleanText);
+      const ctx = getAudioContext();
+      if (ctx.state === 'suspended') await ctx.resume();
+
+      const audioBuffer = await generateSpeech(cleanText, ctx);
       
       if (audioBuffer) {
-        const ctx = getAudioContext();
+        // Important: check if we are still the message that requested playback
+        setMessages(prev => {
+          const stillActive = prev.some(m => m.id === id && m.isAudioLoading);
+          if (!stillActive) return prev;
+
+          return prev.map(m => m.id === id ? { ...m, isAudioLoading: false, audioPlaying: true } : m);
+        });
+
         const source = ctx.createBufferSource();
         source.buffer = audioBuffer;
         source.connect(ctx.destination);
@@ -123,11 +133,11 @@ export default function App() {
         currentAudioSourceRef.current = source;
         source.start(0);
       } else {
-        setMessages(prev => prev.map(m => m.id === id ? { ...m, audioPlaying: false } : m));
+        setMessages(prev => prev.map(m => m.id === id ? { ...m, isAudioLoading: false } : m));
       }
     } catch (error) {
       console.error("Audio playback error:", error);
-      setMessages(prev => prev.map(m => m.id === id ? { ...m, audioPlaying: false } : m));
+      setMessages(prev => prev.map(m => m.id === id ? { ...m, isAudioLoading: false, audioPlaying: false } : m));
     }
   };
 
@@ -186,7 +196,6 @@ export default function App() {
       recognitionRef.current?.stop();
       setIsListening(false);
     } else {
-      // Resume AudioContext if it was suspended (browser policy)
       getAudioContext().resume();
       recognitionRef.current?.start();
       setIsListening(true);
