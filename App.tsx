@@ -86,23 +86,17 @@ export default function App() {
 
   const handleSpeak = async (text: string, id: string) => {
     const targetMessage = messages.find(m => m.id === id);
-    
-    // If already playing OR loading THIS message, stop it
     if (targetMessage?.audioPlaying || targetMessage?.isAudioLoading) {
       stopAllAudio();
       return;
     }
 
-    // Stop anything else currently playing
     stopAllAudio();
-
-    // Mark as loading
     setMessages(prev => prev.map(m => m.id === id ? { ...m, isAudioLoading: true } : m));
 
     try {
-      // Clean text of markdown characters for better TTS
-      const cleanText = text.replace(/!\[.*?\]\(.*?\)/g, '') // remove images
-                           .replace(/[#*`_~]/g, '')           // remove formatting
+      const cleanText = text.replace(/!\[.*?\]\(.*?\)/g, '')
+                           .replace(/[#*`_~]/g, '')
                            .trim();
 
       const ctx = getAudioContext();
@@ -111,11 +105,9 @@ export default function App() {
       const audioBuffer = await generateSpeech(cleanText, ctx);
       
       if (audioBuffer) {
-        // Important: check if we are still the message that requested playback
         setMessages(prev => {
           const stillActive = prev.some(m => m.id === id && m.isAudioLoading);
           if (!stillActive) return prev;
-
           return prev.map(m => m.id === id ? { ...m, isAudioLoading: false, audioPlaying: true } : m);
         });
 
@@ -145,7 +137,6 @@ export default function App() {
     const textToSend = overrideText || inputText;
     if (!textToSend.trim() || isLoading) return;
 
-    // Stop audio when user sends a new message
     stopAllAudio();
 
     const userMsg: Message = {
